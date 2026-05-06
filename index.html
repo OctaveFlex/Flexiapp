@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fleximarket App</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0e0e0c; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 20px; font-family: system-ui, sans-serif; }
+
+    .app { width: 100%; max-width: 420px; background: #161614; border-radius: 16px; overflow: hidden; position: relative; min-height: 700px; border: 0.5px solid #2a2a28; }
+
+    /* Overlay */
+    .overlay { display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.5); z-index: 10; border-radius: 16px; }
+    .overlay.open { display: block; }
+
+    /* Sidebar */
+    .sidebar {
+      position: absolute; top: 0; left: 0; width: 230px; height: 100%;
+      background: #1a1a18; z-index: 20;
+      transform: translateX(-100%);
+      transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+      display: flex; flex-direction: column;
+    }
+    .sidebar.open { transform: translateX(0); }
+
+    .sb-top { padding: 16px 14px 12px; border-bottom: 0.5px solid rgba(255,255,255,0.07); }
+    .sb-logo { display: flex; align-items: center; gap: 10px; }
+    .sb-icon { width: 34px; height: 34px; border-radius: 7px; background: #2a6e3f; display: flex; align-items: center; justify-content: center; }
+    .sb-icon i { color: #5dd68a; font-size: 18px; }
+    .sb-title { color: #fff; font-size: 13px; font-weight: 600; line-height: 1.2; }
+    .sb-sub { color: #6a6a62; font-size: 10px; margin-top: 2px; }
+    .sb-dot { display: inline-block; width: 6px; height: 6px; background: #3cb46e; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+    .sb-section { padding: 14px 14px 4px; color: #444440; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; }
+
+    .sb-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; color: #b0b0a8; font-size: 13px;
+      cursor: pointer; border-radius: 7px; margin: 2px 6px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .sb-item:hover { background: rgba(255,255,255,0.06); color: #e0e0d8; }
+    .sb-item.active { background: rgba(60,180,110,0.13); color: #5dd68a; }
+    .sb-item i { font-size: 17px; width: 20px; }
+
+    .sb-footer {
+      margin-top: auto; padding: 12px 10px;
+      border-top: 0.5px solid rgba(255,255,255,0.07);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .av { width: 32px; height: 32px; border-radius: 50%; background: #3cb46e; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+    .av-info { flex: 1; overflow: hidden; }
+    .av-name { color: #e0e0d8; font-size: 12px; font-weight: 500; }
+    .av-role { color: #555550; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Top bar */
+    .topbar {
+      background: #111110; padding: 11px 14px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 0.5px solid rgba(255,255,255,0.07);
+    }
+    .burger { background: none; border: none; color: #b0b0a8; cursor: pointer; padding: 5px; display: flex; align-items: center; border-radius: 5px; transition: background 0.15s; }
+    .burger:hover { background: rgba(255,255,255,0.07); }
+    .burger i { font-size: 20px; }
+    .topbar-title { flex: 1; text-align: center; color: #fff; font-size: 15px; font-weight: 500; }
+    .topbar-date { color: #555550; font-size: 11px; border: 0.5px solid #2a2a28; border-radius: 20px; padding: 3px 9px; }
+    .topbar-refresh { background: none; border: none; color: #555550; cursor: pointer; padding: 5px; display: flex; align-items: center; transition: color 0.15s; }
+    .topbar-refresh:hover { color: #b0b0a8; }
+    .topbar-refresh i { font-size: 16px; }
+
+    /* Main content */
+    .main { padding: 14px; }
+
+    /* Search */
+    .search {
+      background: #222220; border: 0.5px solid #2e2e2c; border-radius: 9px;
+      padding: 9px 12px; display: flex; align-items: center; gap: 9px; margin-bottom: 14px;
+      transition: border-color 0.15s;
+    }
+    .search:focus-within { border-color: #3a3a38; }
+    .search i { color: #505050; font-size: 16px; flex-shrink: 0; }
+    .search input { background: none; border: none; outline: none; color: #c0c0b8; font-size: 13px; width: 100%; font-family: inherit; }
+    .search input::placeholder { color: #484844; }
+
+    /* Client rows */
+    .row {
+      background: #1e1e1c; border-radius: 9px; margin-bottom: 7px;
+      padding: 11px 12px; border: 0.5px solid #272724;
+      cursor: pointer; transition: border-color 0.15s;
+    }
+    .row:hover { border-color: #3a3a36; }
+
+    .row-top { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 9px; }
+    .code-badge {
+      background: #221a00; color: #d09020; font-size: 10px; font-weight: 600;
+      padding: 3px 7px; border-radius: 5px; border: 0.5px solid #332800;
+      white-space: nowrap; font-family: monospace; flex-shrink: 0;
+    }
+    .client-info { flex: 1; }
+    .client-name { color: #e0e0d8; font-size: 13px; font-weight: 500; line-height: 1.3; }
+    .client-loc { color: #444440; font-size: 10px; margin-top: 1px; }
+
+    .cotis {
+      display: flex; align-items: center; gap: 4px;
+      background: #221a00; border: 0.5px solid #332800;
+      border-radius: 12px; padding: 3px 8px;
+      font-size: 11px; font-weight: 500; color: #d09020;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .cotis.green { background: #0a2215; border-color: #1a4028; color: #3cb46e; }
+    .cotis i { font-size: 12px; }
+
+    .row-bottom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .contrat { color: #606058; font-size: 11px; flex: 1; min-width: 100px; }
+
+    .progress-wrap { flex: 1; min-width: 90px; }
+    .progress-label { color: #424240; font-size: 10px; margin-bottom: 4px; }
+    .progress-bar { height: 3px; background: #2a2a28; border-radius: 2px; overflow: hidden; }
+    .progress-fill { height: 100%; background: #2a6e3f; border-radius: 2px; }
+
+    .badge-ok { color: #3cb46e; font-size: 11px; display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+    .badge-ok i { font-size: 12px; }
+    .badge-late { color: #d04040; font-size: 11px; display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+    .badge-late i { font-size: 12px; }
+
+    .btn-detail {
+      background: none; border: 0.5px solid #2e2e2c; border-radius: 5px;
+      color: #707068; font-size: 10px; padding: 4px 9px; cursor: pointer;
+      display: flex; align-items: center; gap: 4px;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-detail:hover { border-color: #4a4a46; color: #c0c0b8; }
+    .btn-detail i { font-size: 12px; }
+  </style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- Overlay -->
+  <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sb-top">
+      <div class="sb-logo">
+        <div class="sb-icon"><i class="ti ti-building-store"></i></div>
+        <div>
+          <div class="sb-title">FLEXIMARKT APP</div>
+          <div class="sb-sub"><span class="sb-dot"></span>Synchronisé</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-section">Mon espace</div>
+
+    <div class="sb-item active" onclick="closeSidebar()"><i class="ti ti-users"></i>Mes clients</div>
+    <div class="sb-item" onclick="closeSidebar()"><i class="ti ti-user-plus"></i>Nouveau client</div>
+    <div class="sb-item" onclick="closeSidebar()"><i class="ti ti-coin"></i>Saisie de mises</div>
+    <div class="sb-item" onclick="closeSidebar()"><i class="ti ti-layout-grid"></i>Catalogue visuel</div>
+    <div class="sb-item" onclick="closeSidebar()"><i class="ti ti-file-text"></i>Fiche du jour</div>
+
+    <div class="sb-footer">
+      <div class="av">O</div>
+      <div class="av-info">
+        <div class="av-name">Octave</div>
+        <div class="av-role">Commercial · Cotonou · Agence Centrale</div>
+      </div>
+      <i class="ti ti-logout" style="color:#444;font-size:16px;cursor:pointer"></i>
+    </div>
+  </div>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <button class="burger" onclick="toggleSidebar()" aria-label="Menu">
+      <i class="ti ti-menu-2"></i>
+    </button>
+    <span class="topbar-title">Mes clients</span>
+    <span class="topbar-date">mer. 6 mai</span>
+    <button class="topbar-refresh" aria-label="Actualiser">
+      <i class="ti ti-refresh"></i>
+    </button>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <div class="search">
+      <i class="ti ti-search"></i>
+      <input type="text" placeholder="Rechercher par code, nom, téléphone…" />
+    </div>
+
+    <!-- Client 1 -->
+    <div class="row">
+      <div class="row-top">
+        <span class="code-badge">TTB0001</span>
+        <div class="client-info">
+          <div class="client-name">ARIDA</div>
+          <div class="client-loc">JFGR · JDHH</div>
+        </div>
+        <div class="cotis"><i class="ti ti-coin"></i>25 FCFA</div>
+      </div>
+      <div class="row-bottom">
+        <span class="contrat">Série de 4 boles inox</span>
+        <div class="progress-wrap">
+          <div class="progress-label">9% · Payé 875 FCFA</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:9%"></div></div>
+        </div>
+        <span class="badge-ok"><i class="ti ti-check"></i>À jour</span>
+        <button class="btn-detail"><i class="ti ti-eye"></i>Détail</button>
+      </div>
+    </div>
+
+    <!-- Client 2 -->
+    <div class="row">
+      <div class="row-top">
+        <span class="code-badge">TTB0003</span>
+        <div class="client-info">
+          <div class="client-name">Charlotte</div>
+          <div class="client-loc">Abomey-calavi · Cococodji</div>
+        </div>
+        <div class="cotis green"><i class="ti ti-coin"></i>33 FCFA</div>
+      </div>
+      <div class="row-bottom">
+        <span class="contrat">Série de 2 glacière de table</span>
+        <div class="progress-wrap">
+          <div class="progress-label">0% · Payé 0 FCFA</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+        </div>
+        <span class="badge-late"><i class="ti ti-alert-triangle"></i>1j retard</span>
+        <button class="btn-detail"><i class="ti ti-eye"></i>Détail</button>
+      </div>
+    </div>
+
+    <!-- Client 3 -->
+    <div class="row">
+      <div class="row-top">
+        <span class="code-badge">TTB0002</span>
+        <div class="client-info">
+          <div class="client-name">nil</div>
+          <div class="client-loc">neizezei · jenzigzfuz</div>
+        </div>
+        <div class="cotis"><i class="ti ti-coin"></i>25 FCFA</div>
+      </div>
+      <div class="row-bottom">
+        <span class="contrat">Série de 4 boles inox</span>
+        <div class="progress-wrap">
+          <div class="progress-label">8% · Payé 750 FCFA</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:8%"></div></div>
+        </div>
+        <span class="badge-ok"><i class="ti ti-check"></i>À jour</span>
+        <button class="btn-detail"><i class="ti ti-eye"></i>Détail</button>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
+  }
+</script>
+
+</body>
+</html>
