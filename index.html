@@ -512,8 +512,40 @@ td{padding:9px 12px;font-size:12px;}
   #btn-top{display:none!important;}
 }
 </style>
+     /* ═══ RESPONSIVE MOBILE ═══ */
+@media (max-width: 768px) {
+  #sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    height: 100%;
+    width: 260px;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+  }
+  #sidebar.open {
+    transform: translateX(0);
+  }
+  #sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 999;
+  }
+  #sidebar-overlay.visible {
+    display: block;
+  }
+  .layout-main {
+    margin-left: 0 !important;
+  }
+  .topbar {
+    padding-left: 12px !important;
+  }
+}
 </head>
 <body>
+     <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 <!-- Overlay mobile pour fermer la sidebar -->
 <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
@@ -598,7 +630,7 @@ td{padding:9px 12px;font-size:12px;}
 
 <!-- MAIN -->
 <main id="main">
-  <div class="topbar">
+  <div class="topbar"><button onclick="toggleSidebar()" style="background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:0 10px;" id="burger-btn">☰</button>
     <button id="hamburger-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
     <div class="page-title" id="pg-title">—</div>
     <div class="topbar-right">
