@@ -3041,7 +3041,7 @@ window.addEventListener('orientationchange', function(){ setTimeout(setAppHeight
       <span style="font-size:10px;color:var(--muted);">Laisser vide = date du jour</span>
     </div>
     <div class="ma">
-      <button class="btn btn-ghost" onclick="closeM('m-import-preview');importData=[];">Annuler</button>
+      <button class="btn btn-ghost" onclick="closeM('m-import-preview');importData=[];_clearImportProgress();">Annuler</button>
       <button class="btn btn-primary" onclick="confirmImport()">✓ Importer <span id="import-count"></span> clients</button>
     </div>
   </div>
@@ -11268,6 +11268,9 @@ function normalizeDate(d){
 }
 
 function prepareImportPreview(rows){
+  // ✅ FIX : nouveau fichier chargé → on efface toute progression d'un import précédent
+  // pour ne pas sauter des lignes qui appartiennent en réalité à un autre fichier.
+  _clearImportProgress();
   importData = rows.map(normalizeRow).filter(r=>r.nom);
   const errors = rows.length - importData.length;
 
@@ -11337,6 +11340,22 @@ function prepareImportPreview(rows){
   openM('m-import-preview');
 }
 
+// ── Sauvegarde de progression (permet de reprendre un import interrompu sans doublons) ──
+const IMPORT_PROGRESS_KEY = 'fleximarket_import_progress_v1';
+
+function _saveImportProgress(doneIndexes){
+  try { localStorage.setItem(IMPORT_PROGRESS_KEY, JSON.stringify(Array.from(doneIndexes))); } catch(e){}
+}
+function _loadImportProgress(){
+  try {
+    const raw = localStorage.getItem(IMPORT_PROGRESS_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch(e){ return new Set(); }
+}
+function _clearImportProgress(){
+  try { localStorage.removeItem(IMPORT_PROGRESS_KEY); } catch(e){}
+}
+
 window.confirmImport = async function(){
   if(!importData.length){ notify('Aucune donnée à importer','err'); return; }
 
@@ -11346,7 +11365,11 @@ window.confirmImport = async function(){
   const codesUtilises = new Set(DB.clients.map(c=>(c.codeClient||'').toUpperCase()).filter(Boolean));
   const codesVusDansFichier = new Set();
 
-  let count=0, ignores=0, generes=0, paiementsReportes=0;
+  // ✅ FIX : reprise après coupure — les lignes déjà importées lors d'une tentative précédente sont sautées
+  const dejaTraitees = _loadImportProgress();
+
+  let count=0, ignores=0, generes=0, paiementsReportes=0, echecs=0;
+  const lignesEnErreur = [];
 
   // Indicateur de progression
   const total = importData.length;
@@ -11356,78 +11379,124 @@ window.confirmImport = async function(){
   notifEl.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--card);border:1px solid var(--border);padding:10px 20px;border-radius:8px;font-size:13px;';
   document.body.appendChild(notifEl);
 
+  const btnConfirm = document.querySelector('#m-import-preview .btn-primary');
+  if(btnConfirm){ btnConfirm.disabled = true; }
+
   try {
     for(let i = 0; i < importData.length; i++){
-      const r = importData[i];
-      const nom = String(r.nom||'').trim().slice(0,100);
-      const tel  = String(r.tel||'').trim().replace(/[^0-9+\s\-]/g,'').slice(0,20);
-      const ville = String(r.ville||'').trim().slice(0,80);
-      const quartier = String(r.quartier||'').trim().slice(0,80);
-      const contrat  = String(r.contrat||'À définir').trim().slice(0,200);
-      const montant  = Math.max(0, Math.min(Number(r.montant)||0, 999999999));
-      const cotisationJour = r.cotisationJour > 0 ? Math.max(0, Math.min(Number(r.cotisationJour), 999999)) : 0;
-      const duree    = Math.max(1, Math.min(Number(r.duree)||372, 3650));
-      const debut    = /^\d{4}-\d{2}-\d{2}$/.test(r.debut) ? r.debut : dateImportCli;
-      if(!nom){ ignores++; continue; }
+      // ✅ FIX : ligne déjà importée précédemment → on saute, évite les doublons en cas de reprise
+      if(dejaTraitees.has(i)) continue;
 
-      let codeClient = (r.codeClient||'').toString().toUpperCase().trim().slice(0,20);
-      if(codeClient){
-        if(codesUtilises.has(codeClient) || codesVusDansFichier.has(codeClient)){
-          ignores++; continue;
-        }
-        codesVusDansFichier.add(codeClient);
-        codesUtilises.add(codeClient);
-      } else {
-        codeClient = await genererCodeClient(comId);
-        codesUtilises.add(codeClient);
-        generes++;
-      }
-
-      const clientDoc = {
-        nom, tel, ville, quartier,
-        contrat, montantTotal: montant,
-        duree, debut,
-        note:'', commercialId:comId,
-        adhesion:r.adhesion||0, adhesionStatut:r.adhesionStatut||'non_paye',
-        codeClient, createdAt:dateImportCli, origine:'import'
-      };
-      if(cotisationJour > 0) clientDoc.cotisationJourFixe = cotisationJour;
-
-      // Enregistrement individuel via fbAdd
-      const clientRef = await fbAdd('clients', clientDoc);
-      const clientId = clientRef.id || clientRef;
-
-      const montantDejaPaye = Math.max(0, Math.min(Number(r.montantDejaPaye)||0, 999999999));
-      if(montantDejaPaye > 0){
-        const datePai = /^\d{4}-\d{2}-\d{2}$/.test(r.dateDernierPaiement) ? r.dateDernierPaiement : debut;
-        const cotisRef = cotisationJour > 0 ? cotisationJour : (montant > 0 ? Math.ceil(montant/duree) : 0);
-        await fbAdd('paiements', {
-          clientId, commercialId: comId,
-          cotisJour: cotisRef, montant: montantDejaPaye,
-          date: datePai, heure: '00:00',
-          note: r.notePaiement || "Paiement reporté à l'import",
-          origine: 'import_historique'
+      // ✅ FIX : connexion coupée détectée → pause de l'import plutôt que d'enchaîner des échecs réseau
+      if(!isOnline){
+        notifEl.textContent = `⏸️ Connexion perdue — import en pause à la ligne ${i+1} / ${total}. Reconnexion en attente…`;
+        await new Promise(resolve=>{
+          const check = () => {
+            if(isOnline){ window.removeEventListener('online', check); resolve(); }
+          };
+          window.addEventListener('online', check);
         });
-        paiementsReportes++;
+        notifEl.textContent = `▶️ Connexion rétablie — reprise… ${count} / ${total}`;
       }
 
-      count++;
-      notifEl.textContent = `⏳ Import en cours… ${count} / ${total}`;
+      const r = importData[i];
+      try {
+        const nom = String(r.nom||'').trim().slice(0,100);
+        const tel  = String(r.tel||'').trim().replace(/[^0-9+\s\-]/g,'').slice(0,20);
+        const ville = String(r.ville||'').trim().slice(0,80);
+        const quartier = String(r.quartier||'').trim().slice(0,80);
+        const contrat  = String(r.contrat||'À définir').trim().slice(0,200);
+        const montant  = Math.max(0, Math.min(Number(r.montant)||0, 999999999));
+        const cotisationJour = r.cotisationJour > 0 ? Math.max(0, Math.min(Number(r.cotisationJour), 999999)) : 0;
+        const duree    = Math.max(1, Math.min(Number(r.duree)||372, 3650));
+        const debut    = /^\d{4}-\d{2}-\d{2}$/.test(r.debut) ? r.debut : dateImportCli;
+        if(!nom){ ignores++; dejaTraitees.add(i); continue; }
+
+        let codeClient = (r.codeClient||'').toString().toUpperCase().trim().slice(0,20);
+        if(codeClient){
+          if(codesUtilises.has(codeClient) || codesVusDansFichier.has(codeClient)){
+            ignores++; dejaTraitees.add(i); continue;
+          }
+          codesVusDansFichier.add(codeClient);
+          codesUtilises.add(codeClient);
+        } else {
+          codeClient = await genererCodeClient(comId);
+          codesUtilises.add(codeClient);
+          generes++;
+        }
+
+        const clientDoc = {
+          nom, tel, ville, quartier,
+          contrat, montantTotal: montant,
+          duree, debut,
+          note:'', commercialId:comId,
+          adhesion:r.adhesion||0, adhesionStatut:r.adhesionStatut||'non_paye',
+          codeClient, createdAt:dateImportCli, origine:'import'
+        };
+        if(cotisationJour > 0) clientDoc.cotisationJourFixe = cotisationJour;
+
+        // Enregistrement individuel via fbAdd
+        const clientRef = await fbAdd('clients', clientDoc);
+        const clientId = clientRef.id || clientRef;
+
+        const montantDejaPaye = Math.max(0, Math.min(Number(r.montantDejaPaye)||0, 999999999));
+        if(montantDejaPaye > 0){
+          const datePai = /^\d{4}-\d{2}-\d{2}$/.test(r.dateDernierPaiement) ? r.dateDernierPaiement : debut;
+          const cotisRef = cotisationJour > 0 ? cotisationJour : (montant > 0 ? Math.ceil(montant/duree) : 0);
+          await fbAdd('paiements', {
+            clientId, commercialId: comId,
+            cotisJour: cotisRef, montant: montantDejaPaye,
+            date: datePai, heure: '00:00',
+            note: r.notePaiement || "Paiement reporté à l'import",
+            origine: 'import_historique'
+          });
+          paiementsReportes++;
+        }
+
+        count++;
+        dejaTraitees.add(i);
+        // ✅ FIX : sauvegarde périodique de la progression pour permettre une reprise
+        // sans tout ré-envoyer si la page est fermée/rechargée après une coupure.
+        if(count % 5 === 0) _saveImportProgress(dejaTraitees);
+        notifEl.textContent = `⏳ Import en cours… ${count} / ${total}`;
+
+      } catch(rowErr){
+        // ✅ FIX : une erreur réseau/Firestore sur UNE ligne ne bloque plus tout l'import,
+        // on continue avec les lignes suivantes.
+        echecs++;
+        lignesEnErreur.push({ligne:i+1, nom:r.nom||'(sans nom)', erreur: rowErr.message||String(rowErr)});
+        console.error(`Import client — échec ligne ${i+1} :`, rowErr);
+        notifEl.textContent = `⚠️ Erreur ligne ${i+1} — poursuite… ${count} / ${total} (${echecs} échec(s))`;
+        // Petite pause pour laisser la connexion se stabiliser avant la tentative suivante
+        await new Promise(res=>setTimeout(res, 300));
+      }
     }
     // Invalider le cache pour forcer un re-fetch propre
     _syncLocalAfterWrite('clients');
     _syncLocalAfterWrite('paiements');
   } finally {
     notifEl.remove();
+    if(btnConfirm){ btnConfirm.disabled = false; }
   }
 
-  closeM('m-import-preview');
-  importData=[];
+  if(echecs===0){
+    // ✅ FIX : import terminé sans erreur → on nettoie la progression sauvegardée
+    _clearImportProgress();
+    closeM('m-import-preview');
+    importData = [];
+  } else {
+    // ✅ FIX : on conserve importData + la progression pour permettre de relancer "Importer"
+    // et ne traiter que les lignes restantes, sans créer de doublons.
+    _saveImportProgress(dejaTraitees);
+    notify(`⚠️ ${echecs} client(s) n'ont pas pu être importés (voir console). Cliquez à nouveau sur "Importer" pour réessayer uniquement les lignes restantes.`, 'err');
+  }
+
   let msg = `${count} client(s) importé(s) avec succès !`;
   if(generes>0) msg += ` (${generes} code(s) générés auto)`;
   if(paiementsReportes>0) msg += ` — ${paiementsReportes} paiement(s) historique(s) reporté(s)`;
   if(ignores>0) msg += ` — ${ignores} ignoré(s) (doublon de code)`;
-  notify(msg);
+  if(echecs>0) msg += ` — ${echecs} échec(s) réseau (voir console, cliquez à nouveau sur Importer)`;
+  notify(msg, echecs>0?'err':undefined);
 };
 
 // ========= IMPORT ARTICLES =========
