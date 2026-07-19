@@ -205,13 +205,13 @@
   // (AES-GCM) et persistée dans localStorage — donc cet écran ne s'affiche
   // qu'au premier lancement sur chaque appareil/navigateur.
   const FIREBASE_CONFIG = {
-    apiKey:            "AIzaSyACD1QNQC0YAYfWLHRX_BEv6Qg_qFuSy2g",
-    authDomain:        "fleximarket-system.firebaseapp.com",
-    projectId:         "fleximarket-system",
-    storageBucket:     "fleximarket-system.firebasestorage.app",
-    messagingSenderId: "1069617616758",
-    appId:             "1:1069617616758:web:b81136849c9385f3a84c57",
-    measurementId:     ""
+    apiKey:            "AIzaSyATa_tOvEbGROCIZ9xZgkAsr_--d2vYIjc",
+    authDomain:        "triomphant-v2.firebaseapp.com",
+    projectId:         "triomphant-v2",
+    storageBucket:     "triomphant-v2.firebasestorage.app",
+    messagingSenderId: "908578874554",
+    appId:             "1:908578874554:web:5c008fba39204ce6c24e83",
+    measurementId:     "G-STQHJF83X2"
   };
   // ✅ FIN DE LA CONFIGURATION
   window.FIREBASE_CONFIG = FIREBASE_CONFIG;
@@ -12066,8 +12066,17 @@ window.confirmImport = async function(){
     // Invalider le cache pour forcer un re-fetch propre
     _syncLocalAfterWrite('clients');
     _syncLocalAfterWrite('paiements');
-  } finally {
+  } catch(err) {
+    // ✅ FIX : ne plus laisser l'import s'arrêter en silence.
+    // On informe l'utilisateur, on garde ce qui a déjà été importé,
+    // et on indique la ligne où ça a échoué pour pouvoir corriger le fichier.
+    console.error('Erreur import clients :', err);
     notifEl.remove();
+    closeM('m-import-preview');
+    notify(`❌ Import interrompu après ${count} ligne(s) importée(s) avec succès. Erreur : ${err && err.message ? err.message : err}. Vérifiez la ligne suivante dans votre fichier et relancez l'import pour le reste.`, 'err');
+    return;
+  } finally {
+    if(notifEl.isConnected) notifEl.remove();
   }
 
   closeM('m-import-preview');
