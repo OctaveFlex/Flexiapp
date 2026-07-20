@@ -207,11 +207,11 @@
   const FIREBASE_CONFIG = {
     apiKey:            "AIzaSyACD1QNQC0YAYfWLHRX_BEv6Qg_qFuSy2g",
     authDomain:        "fleximarket-system.firebaseapp.com",
+    databaseURL:       "https://fleximarket-system-default-rtdb.firebaseio.com",
     projectId:         "fleximarket-system",
     storageBucket:     "fleximarket-system.firebasestorage.app",
     messagingSenderId: "1069617616758",
-    appId:             "1:1069617616758:web:b81136849c9385f3a84c57",
-    measurementId:     ""
+    appId:             "1:1069617616758:web:b81136849c9385f3a84c57"
   };
   // ✅ FIN DE LA CONFIGURATION
   window.FIREBASE_CONFIG = FIREBASE_CONFIG;
@@ -1117,9 +1117,9 @@ window.addEventListener('orientationchange', function(){ setTimeout(setAppHeight
     <div class="online-badge"><div class="online-dot"></div><span id="mode-badge">En ligne — données partagées</span></div>
     <div class="lform">
       <label>Identifiant</label>
-      <input type="text" id="login-user" placeholder="Nom d'utilisateur ou Gmail" autocomplete="username" style="font-size:13px;" onkeydown="if(event.key==='Enter')document.getElementById('login-pin').focus()">
+      <input type="text" id="login-user" placeholder="Nom d'utilisateur ou Gmail" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-size:13px;" onkeydown="if(event.key==='Enter')document.getElementById('login-pin').focus()">
       <label>Mot de passe</label>
-      <input type="password" id="login-pin" placeholder="••••••••" style="letter-spacing:2px;font-size:16px;text-align:left;" onkeydown="if(event.key==='Enter')doLogin()">
+      <input type="password" id="login-pin" placeholder="••••••••" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" style="letter-spacing:2px;font-size:16px;text-align:left;" onkeydown="if(event.key==='Enter')doLogin()">
     </div>
     <div class="login-err" id="login-err">Identifiant ou mot de passe incorrect.</div>
     <button class="btn btn-primary" style="width:100%;padding:11px;font-size:13px;margin-top:4px;" onclick="doLogin()">Connexion</button>
@@ -5951,7 +5951,7 @@ async function _resetServerLock(email) {
 }
 window.doLogin = async function(){
   const raw = (document.getElementById('login-user').value || '').trim().toLowerCase();
-  const pinRaw = document.getElementById('login-pin').value;
+  const pinRaw = document.getElementById('login-pin').value.trim();
   const errEl = document.getElementById('login-err');
 
   if (!raw || !pinRaw) {
